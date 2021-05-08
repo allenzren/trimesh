@@ -9,8 +9,10 @@ from ..version import __version__ as trimesh_version
 
 def export_urdf(mesh,
                 directory,
+                ind=0,
+                mass=0.1,
                 scale=1.0,
-                color=[0.75, 0.75, 0.75],
+                color=[0.98, 0.84, 0.35],
                 **kwargs):
     """
     Convert a Trimesh object into a URDF package for physics simulation.
@@ -57,8 +59,11 @@ def export_urdf(mesh,
         convex_pieces = [mesh.convex_hull]
 
     # Get the effective density of the mesh
-    effective_density = mesh.volume / sum([
-        m.volume for m in convex_pieces])
+    # effective_density = mesh.volume / sum([
+        # m.volume for m in convex_pieces])
+
+    # Use provided mass for density
+    density = mass/sum([m.volume for m in convex_pieces])
 
     # open an XML tree
     root = et.Element('robot', name='root')
@@ -68,14 +73,16 @@ def export_urdf(mesh,
     for i, piece in enumerate(convex_pieces):
 
         # Save each nearly convex mesh out to a file
-        piece_name = '{}_convex_piece_{}'.format(name, i)
+        # piece_name = '{}_convex_piece_{}'.format(name, i)
+        piece_name = 'convex_piece_{}'.format(i)
         piece_filename = '{}.obj'.format(piece_name)
         piece_filepath = os.path.join(fullpath, piece_filename)
         export_mesh(piece, piece_filepath)
 
         # Set the mass properties of the piece
         piece.center_mass = mesh.center_mass
-        piece.density = effective_density * mesh.density
+        # piece.density = effective_density * mesh.density
+        piece.density = density
 
         link_name = 'link_{}'.format(piece_name)
         geom_name = '{}'.format(piece_filename)
@@ -137,27 +144,27 @@ def export_urdf(mesh,
 
     # Write URDF file
     tree = et.ElementTree(root)
-    urdf_filename = '{}.urdf'.format(name)
+    urdf_filename = '{}.urdf'.format(ind)
     tree.write(os.path.join(fullpath, urdf_filename),
                pretty_print=True)
 
     # Write Gazebo config file
-    root = et.Element('model')
-    model = et.SubElement(root, 'name')
-    model.text = name
-    version = et.SubElement(root, 'version')
-    version.text = '1.0'
-    sdf = et.SubElement(root, 'sdf', version='1.4')
-    sdf.text = '{}.urdf'.format(name)
+    # root = et.Element('model')
+    # model = et.SubElement(root, 'name')
+    # model.text = name
+    # version = et.SubElement(root, 'version')
+    # version.text = '1.0'
+    # sdf = et.SubElement(root, 'sdf', version='1.4')
+    # sdf.text = '{}.urdf'.format(name)
 
-    author = et.SubElement(root, 'author')
-    et.SubElement(author, 'name').text = 'trimesh {}'.format(trimesh_version)
-    et.SubElement(author, 'email').text = 'blank@blank.blank'
+    # author = et.SubElement(root, 'author')
+    # et.SubElement(author, 'name').text = 'trimesh {}'.format(trimesh_version)
+    # et.SubElement(author, 'email').text = 'blank@blank.blank'
 
-    description = et.SubElement(root, 'description')
-    description.text = name
+    # description = et.SubElement(root, 'description')
+    # description.text = name
 
-    tree = et.ElementTree(root)
-    tree.write(os.path.join(fullpath, 'model.config'))
+    # tree = et.ElementTree(root)
+    # tree.write(os.path.join(fullpath, 'model.config'))
 
     return np.sum(convex_pieces)
