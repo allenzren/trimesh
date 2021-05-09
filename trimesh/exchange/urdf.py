@@ -8,8 +8,8 @@ from ..version import __version__ as trimesh_version
 
 
 def export_urdf(mesh,
-                directory,
-                ind=0,
+                directory, # save urdf in parent dir
+                ind=0,  # save convex stl in subfolder - assume exists
                 mass=0.1,
                 scale=1.0,
                 color=[0.98, 0.84, 0.35],
@@ -76,7 +76,8 @@ def export_urdf(mesh,
         # piece_name = '{}_convex_piece_{}'.format(name, i)
         piece_name = 'convex_piece_{}'.format(i)
         piece_filename = '{}.obj'.format(piece_name)
-        piece_filepath = os.path.join(fullpath, piece_filename)
+        # piece_filepath = os.path.join(fullpath, piece_filename)
+        piece_filepath = os.path.join(fullpath, str(ind), piece_filename) # save in subfolder!
         export_mesh(piece, piece_filepath)
 
         # Set the mass properties of the piece
@@ -85,7 +86,8 @@ def export_urdf(mesh,
         piece.density = density
 
         link_name = 'link_{}'.format(piece_name)
-        geom_name = '{}'.format(piece_filename)
+        # geom_name = '{}'.format(piece_filename)
+        geom_name = '{}/{}'.format(ind, piece_filename) # save in subfolder!
         I = [['{:.2E}'.format(y) for y in x]  # NOQA
              for x in piece.moment_inertia]
 
