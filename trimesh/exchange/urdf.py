@@ -5,6 +5,7 @@ import numpy as np
 from ..constants import log
 from ..decomposition import convex_decomposition
 from ..version import __version__ as trimesh_version
+from ..boolean import intersection
 
 
 def export_urdf(mesh,
@@ -13,6 +14,7 @@ def export_urdf(mesh,
                 mass=0.1,
                 scale=1.0,
                 color=[0.98, 0.84, 0.35],
+                keep_concave_part=False,
                 **kwargs):
     """
     Convert a Trimesh object into a URDF package for physics simulation.
@@ -72,9 +74,16 @@ def export_urdf(mesh,
     prev_link_name = None
     for i, piece in enumerate(convex_pieces):
 
+        # Take intersection of convex part and the original mesh
+        if keep_concave_part:
+            piece = intersection([mesh, piece], engine='scad')
+            # piece.show()
+            piece_name = 'concave_piece_{}'.format(i)
+        else:
+            piece_name = 'convex_piece_{}'.format(i)
+
         # Save each nearly convex mesh out to a file
         # piece_name = '{}_convex_piece_{}'.format(name, i)
-        piece_name = 'convex_piece_{}'.format(i)
         piece_filename = '{}.obj'.format(piece_name)
         # piece_filepath = os.path.join(fullpath, piece_filename)
         piece_filepath = os.path.join(fullpath, str(ind), piece_filename) # save in subfolder!
