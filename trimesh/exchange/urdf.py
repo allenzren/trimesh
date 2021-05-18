@@ -178,5 +178,5 @@ def export_urdf(mesh,
     # tree = et.ElementTree(root)
     # tree.write(os.path.join(fullpath, 'model.config'))
 
-    return len(convex_pieces)
+    return convex_pieces
     # return np.sum(convex_pieces)
