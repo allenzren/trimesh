@@ -76,7 +76,7 @@ def export_urdf(mesh,
 
         # Take intersection of convex part and the original mesh
         if keep_concave_part:
-            piece = intersection([mesh, piece], engine='scad')
+            piece = intersection([mesh, piece], engine='blender')
             # piece.show()
             piece_name = 'concave_piece_{}'.format(i)
         else:
