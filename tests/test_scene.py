@@ -3,8 +3,6 @@ try:
 except BaseException:
     import generic as g
 
-from trimesh.scene.transforms import EnforcedForest
-
 
 def random_chr():
     return chr(ord('a') + int(round(g.np.random.random() * 25)))
@@ -250,6 +248,21 @@ class SceneTests(g.unittest.TestCase):
         assert len(s.geometry) == 3
         assert len(s.graph.nodes_geometry) == 29
 
+        dupe = s.duplicate_nodes
+        assert len(dupe) == 3
+        assert sum(len(i) for i in dupe) == 29
+
+        # test cache dumping and survivability of bad
+        # non-existant geometry specified in node_geometry
+        s.graph.update(dupe[0][0], geometry='GARBAGE')
+        # make sure geometry was updated
+        assert s.graph[dupe[0][0]][1] == 'GARBAGE'
+        # get the regenerated duplicates
+        dupe = s.duplicate_nodes
+        assert len(dupe) == 3
+        # should have been cleanly dropped
+        assert sum(len(i) for i in dupe) == 28
+
     def test_tri(self):
         scene = g.get_mesh('cycloidal.3DXML')
 
@@ -347,36 +360,6 @@ class SceneTests(g.unittest.TestCase):
 
         scene.apply_translation([1, 0, 1])
         assert g.np.allclose(scene.bounds, [[.5, -.5, .5], [1.5, .5, 1.5]])
-
-
-class GraphTests(g.unittest.TestCase):
-
-    def test_forest(self):
-        g = EnforcedForest(assert_forest=True)
-        for i in range(5000):
-            g.add_edge(random_chr(), random_chr())
-
-    def test_cache(self):
-        for i in range(10):
-            scene = g.trimesh.Scene()
-            scene.add_geometry(g.trimesh.creation.box())
-
-            mod = [scene.graph.modified()]
-            scene.set_camera()
-            mod.append(scene.graph.modified())
-            assert mod[-1] != mod[-2]
-
-            assert not g.np.allclose(
-                scene.camera_transform,
-                g.np.eye(4))
-            scene.camera_transform = g.np.eye(4)
-            mod.append(scene.graph.modified())
-            assert mod[-1] != mod[-2]
-
-            assert g.np.allclose(
-                scene.camera_transform,
-                g.np.eye(4))
-            assert mod[-1] != mod[-2]
 
 
 if __name__ == '__main__':

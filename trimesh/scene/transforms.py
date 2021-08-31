@@ -335,7 +335,45 @@ class SceneGraph(object):
                 self.update(edge[1], edge[0])
             # edge is broken
             elif strict:
-                raise ValueError('edge incorrect shape: {}'.format(str(edge)))
+                raise ValueError(
+                    'edge incorrect shape: %s', str(edge))
+
+    def to_networkx(self):
+        """
+        Return a `networkx` copy of this graph.
+
+        Returns
+        ----------
+        graph : networkx.DiGraph
+          Directed graph.
+        """
+        import networkx
+        return networkx.from_edgelist(
+            self.to_edgelist(),
+            create_using=networkx.DiGraph)
+
+    def show(self, **kwargs):
+        """
+        Plot the scene graph using `networkx.draw_networkx`
+        which uses matplotlib to display the graph.
+
+        Parameters
+        -----------
+        kwargs : dict
+          Passed to `networkx.draw_networkx`
+        """
+        import networkx
+        import matplotlib.pyplot as plt
+        # default kwargs will only be set if not
+        # passed explicitly to the show command
+        defaults = {'with_labels': True}
+        kwargs.update(**{k: v for k, v in defaults.items()
+                         if k not in kwargs})
+        networkx.draw_networkx(
+            G=self.to_networkx(),
+            **kwargs)
+
+        plt.show()
 
     def load(self, edgelist):
         """
@@ -453,9 +491,9 @@ class EnforcedForest(object):
 
         # store data for a particular edge keyed by tuple
         # {(u, v) : data }
-        self.edge_data = {}
+        self.edge_data = collections.defaultdict(dict)
         # {u: data}
-        self.node_data = {}
+        self.node_data = collections.defaultdict(dict)
 
         # if multiple calls are made for the same path
         # but the connectivity hasn't changed return cached
@@ -496,7 +534,50 @@ class EnforcedForest(object):
         # store kwargs for edge data keyed with tuple
         self.edge_data[(u, v)] = kwargs
         # set empty node data
-        self.node_data.update({u: {}, v: {}})
+        self.node_data[u].update({})
+        if 'geometry' in kwargs:
+            self.node_data[v].update(
+                {'geometry': kwargs['geometry']})
+        else:
+            self.node_data[v].update({})
+
+        return True
+
+    def remove_node(self, u):
+        """
+        Remove a node from the forest.
+
+        Parameters
+        -----------
+        u : any
+          Hashable node key.
+
+        Returns
+        --------
+        changed : bool
+          Return if this operation changed anything.
+        """
+        # check if node is part of forest
+        if u not in self.node_data:
+            return False
+
+        # topology will change so clear cache
+        self._cache = {}
+
+        # delete all children's references and parent reference
+        children = [child for (child, parent) in self.parents.items() if parent == u]
+        for c in children:
+            del self.parents[c]
+        if u in self.parents:
+            del self.parents[u]
+
+        # delete edge data
+        edges = [(a, b) for (a, b) in self.edge_data if a == u or b == u]
+        for e in edges:
+            del self.edge_data[e]
+
+        # delete node data
+        del self.node_data[u]
 
         return True
 
@@ -584,6 +665,44 @@ class EnforcedForest(object):
         # return as a vanilla dict
         return dict(child)
 
+    def successors(self, node):
+        """
+        Get all nodes that are successors to specified node,
+        including the specified node.
+
+        Parameters
+        -------------
+        node : any
+          Hashable key for a node.
+
+        Returns
+        ------------
+        successors : set
+          Nodes that succeed specified node.
+        """
+        # get mapping of {parent : child}
+        children = self.children
+        # if node doesn't exist return early
+        if node not in children:
+            return set([node])
+
+        # children we need to collect
+        queue = [node]
+        # start collecting values with children of source
+        collected = set(queue)
+
+        # cap maximum iterations
+        for _ in range(len(self.node_data) + 1):
+            if len(queue) == 0:
+                # no more nodes to visit so we're done
+                return collected
+            # add the children of this node to be processed
+            childs = children.get(queue.pop())
+            if childs is not None:
+                queue.extend(childs)
+                collected.update(childs)
+        return collected
+
 
 def kwargs_to_matrix(
         matrix=None,
@@ -605,7 +724,7 @@ def kwargs_to_matrix(
         # a matrix takes immediate precedence over other options
         return np.array(matrix, dtype=np.float64)
     elif quaternion is not None:
-        result = transformations.quaternion_matrix(quaternion)
+        matrix = transformations.quaternion_matrix(quaternion)
     elif axis is not None and angle is not None:
         matrix = transformations.rotation_matrix(angle, axis)
     else:
@@ -614,6 +733,6 @@ def kwargs_to_matrix(
     if translation is not None:
         # translation can be used in conjunction with any
         # of the methods specifying transforms
-        result[:3, 3] += translation
+        matrix[:3, 3] += translation
 
-    return result
+    return matrix

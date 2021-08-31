@@ -678,7 +678,6 @@ def _append_mesh(mesh,
     if len(mesh.faces) == 0 or len(mesh.vertices) == 0:
         log.warning('skipping empty mesh!')
         return
-
     # convert mesh data to the correct dtypes
     # faces: 5125 is an unsigned 32 bit integer
     # accessors refer to data locations
@@ -699,13 +698,11 @@ def _append_mesh(mesh,
                               data=mesh.vertices.astype(float32))
 
     # meshes reference accessor indexes
-    # mode 4 is GL_TRIANGLES
     current = {"name": name,
                "primitives": [{
                    "attributes": {"POSITION": acc_vertex},
                    "indices": acc_face,
-                   "mode": 4}]}
-
+                   "mode": _GL_TRIANGLES}]}
     # if units are defined, store them as an extra
     # the GLTF spec says everything is implicit meters
     # we're not doing that as our unit conversions are expensive
@@ -1114,7 +1111,11 @@ def _parse_materials(header, views, resolver=None):
     return materials
 
 
-def _read_buffers(header, buffers, mesh_kwargs, merge_primitives=False, resolver=None):
+def _read_buffers(header,
+                  buffers,
+                  mesh_kwargs,
+                  merge_primitives=False,
+                  resolver=None):
     """
     Given a list of binary data and a layout, return the
     kwargs to create a scene object.
@@ -1191,6 +1192,8 @@ def _read_buffers(header, buffers, mesh_kwargs, merge_primitives=False, resolver
     # load data from accessors into Trimesh objects
     meshes = collections.OrderedDict()
 
+    names_original = collections.defaultdict(list)
+
     for index, m in enumerate(header.get("meshes", [])):
         metadata = {}
         try:
@@ -1218,6 +1221,7 @@ def _read_buffers(header, buffers, mesh_kwargs, merge_primitives=False, resolver
             attr = p['attributes']
             # create a unique mesh name per- primitive
             name = m.get('name', 'GLTF')
+            names_original[index].append(name)
             # make name unique across multiple meshes
             if name in meshes:
                 name += "_" + util.unique_id(
@@ -1314,16 +1318,24 @@ def _read_buffers(header, buffers, mesh_kwargs, merge_primitives=False, resolver
             if len(names) <= 1:
                 mesh_prim_replace[mesh_index] = names
                 continue
-            # use the first name
-            name = names[0]
+            # use the first original name
+            name = names_original[mesh_index][0]
             # remove the other meshes after we're done looping
-            mesh_pop.extend(names[1:])
+            mesh_pop.extend(names[:])
             # collect the meshes
             # TODO : use mesh concatenation with texture support
             current = [meshes[n] for n in names]
             v_seq = [p['vertices'] for p in current]
             f_seq = [p['faces'] for p in current]
             v, f = util.append_faces(v_seq, f_seq)
+            materials = [p['visual'].material for p in current]
+            face_materials = []
+            for i, p in enumerate(current):
+                face_materials += [i] * len(p['faces'])
+            visuals = visual.texture.TextureVisuals(
+                material=visual.material.MultiMaterial(materials=materials),
+                face_materials=face_materials
+            )
             if 'metadata' in meshes[names[0]]:
                 metadata = meshes[names[0]]['metadata']
             else:
@@ -1331,6 +1343,7 @@ def _read_buffers(header, buffers, mesh_kwargs, merge_primitives=False, resolver
             meshes[name] = {
                 'vertices': v,
                 'faces': f,
+                'visual': visuals,
                 'metadata': metadata,
                 'process': False}
             mesh_prim_replace[mesh_index] = [name]
@@ -1427,6 +1440,7 @@ def _read_buffers(header, buffers, mesh_kwargs, merge_primitives=False, resolver
 
         if "mesh" in child:
             geometries = mesh_prim[child["mesh"]]
+
             # if the node has a mesh associated with it
             if len(geometries) > 1:
                 # append root node

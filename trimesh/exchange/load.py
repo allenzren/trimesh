@@ -209,7 +209,6 @@ def load_mesh(file_obj,
                                           file_type=file_type,
                                           resolver=resolver,
                                           **kwargs)
-
         if not isinstance(results, list):
             results = [results]
 
@@ -296,29 +295,43 @@ def load_compressed(file_obj,
             else:
                 available = mesh_formats()
 
+        meta_archive = {}
         for name, data in files.items():
-            # only load formats that we support
-            compressed_type = util.split_extension(name).lower()
-            if compressed_type not in available:
-                # don't raise an exception, just try the next one
-                continue
-            # store the file name relative to the archive
-            metadata['file_name'] = (archive_name + '/' +
-                                     os.path.basename(name))
-            # load the individual geometry
-            loaded = load(file_obj=data,
-                          file_type=compressed_type,
-                          resolver=resolver,
-                          metadata=metadata,
-                          **kwargs)
+            try:
+                # only load formats that we support
+                compressed_type = util.split_extension(name).lower()
 
-            # some loaders return multiple geometries
-            if util.is_sequence(loaded):
-                # if the loader has returned a list of meshes
-                geometries.extend(loaded)
-            else:
-                # if the loader has returned a single geometry
-                geometries.append(loaded)
+                # if file has metadata type include it
+                if compressed_type in 'yaml':
+                    import yaml
+                    meta_archive[name] = yaml.safe_load(data)
+                elif compressed_type in 'json':
+                    import json
+                    meta_archive[name] = json.loads(data)
+
+                if compressed_type not in available:
+                    # don't raise an exception, just try the next one
+                    continue
+                # store the file name relative to the archive
+                metadata['file_name'] = (archive_name + '/' +
+                                         os.path.basename(name))
+                # load the individual geometry
+                loaded = load(file_obj=data,
+                              file_type=compressed_type,
+                              resolver=resolver,
+                              metadata=metadata,
+                              **kwargs)
+
+                # some loaders return multiple geometries
+                if util.is_sequence(loaded):
+                    # if the loader has returned a list of meshes
+                    geometries.extend(loaded)
+                else:
+                    # if the loader has returned a single geometry
+                    geometries.append(loaded)
+            except BaseException:
+                log.debug('failed to load file in zip',
+                          exc_info=True)
 
     finally:
         # if we opened the file in this function
@@ -328,6 +341,10 @@ def load_compressed(file_obj,
 
     # append meshes or scenes into a single Scene object
     result = append_scenes(geometries)
+
+    # append any archive metadata files
+    if isinstance(result, Scene):
+        result.metadata.update(meta_archive)
 
     return result
 

@@ -239,8 +239,37 @@ class GLTFTest(g.unittest.TestCase):
         assert len(a.geometry) == 4
 
         # should combine the multiple primitives into a single mesh
-        b = g.get_mesh('CesiumMilkTruck.glb', merge_primitives=True)
+        b = g.get_mesh('CesiumMilkTruck.glb',
+                       merge_primitives=True)
         assert len(b.geometry) == 2
+
+    def test_merge_primitives_materials(self):
+        # test to see if the `merge_primitives` logic is working
+        a = g.get_mesh('rgb_cube_with_primitives.gltf',
+                       merge_primitives=True)
+        assert len(a.geometry['Cube'].visual.material) == 3
+        assert a.geometry['Cube'].visual.face_materials == [
+            0, 0, 0, 0, 1, 1,
+            1, 1, 2, 2, 2, 2]
+
+    def test_merge_primitives_materials_roundtrip(self):
+        # test to see if gltf loaded with `merge_primitives`
+        # and then exported back
+        # to gltf, produces a valid gltf.
+        a = g.get_mesh('rgb_cube_with_primitives.gltf',
+                       merge_primitives=True)
+        result = a.export(file_type='gltf', merge_buffers=True)
+        with g.TemporaryDirectory() as d:
+            for file_name, data in result.items():
+                with open(g.os.path.join(d, file_name), 'wb') as f:
+                    f.write(data)
+
+            rd = g.trimesh.load(
+                g.os.path.join(d, 'model.gltf'), merge_primitives=True)
+            assert isinstance(rd, g.trimesh.Scene)
+            # will assert round trip is roughly equal
+            # TODO : restore
+            # g.scene_equal(rd, a)
 
     def test_optional_camera(self):
         gltf_cameras_key = 'cameras'
@@ -339,6 +368,15 @@ class GLTFTest(g.unittest.TestCase):
         # make sure the node names are the same before and after
         assert (set(s.graph.nodes_geometry) ==
                 set(r.graph.nodes_geometry))
+
+    def test_nested_scale(self):
+        # nested transforms with scale
+        s = g.get_mesh('nested.glb')
+        assert len(s.graph.nodes_geometry) == 3
+        assert g.np.allclose(
+            [[-1.16701, -2.3366, -0.26938],
+             [0.26938, 1., 0.26938]],
+            s.bounds, atol=1e-4)
 
     def test_schema(self):
         # get a copy of the GLTF schema and do simple checks
@@ -655,6 +693,28 @@ class GLTFTest(g.unittest.TestCase):
                 # reloaded = g.trimesh.load(
                 #    g.trimesh.util.wrap_as_stream(export),
                 #    file_type='glb')
+
+    def test_equal_by_default(self):
+        # all things being equal we shouldn't be moving things
+        # for the usual load-export loop
+        s = g.get_mesh('fuze.obj')
+        # export as GLB then re-load
+        export = s.export(file_type='glb')
+        validate_glb(export)
+        reloaded = g.trimesh.load(
+            g.trimesh.util.wrap_as_stream(export),
+            file_type='glb', process=False)
+        assert len(reloaded.geometry) == 1
+        m = next(iter(reloaded.geometry.values()))
+        assert g.np.allclose(m.visual.uv,
+                             s.visual.uv)
+        assert g.np.allclose(m.vertices,
+                             s.vertices)
+        assert g.np.allclose(m.faces,
+                             s.faces)
+
+        # will run a kdtree check
+        g.texture_equal(s, m)
 
 
 if __name__ == '__main__':

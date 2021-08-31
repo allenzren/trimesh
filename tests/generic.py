@@ -80,6 +80,11 @@ except BaseException as E:
     if all_dep:
         raise E
 
+try:
+    import networkx as nx
+except BaseException as E:
+    pass
+
 # find_executable for binvox
 has_binvox = trimesh.exchange.binvox.binvox_encoder is not None
 
@@ -185,6 +190,16 @@ def get_mesh(file_name, *args, **kwargs):
 def get_path(file_name):
     """
     Get the absolute location of a referenced model file.
+
+    Parameters
+    ------------
+    file_name : str
+      Name of model relative to `repo/models`
+
+    Returns
+    ------------
+    full : str
+      Full absolute path to model.
     """
     return os.path.abspath(
         os.path.join(dir_models, file_name))
@@ -350,6 +365,34 @@ def scene_equal(a, b):
         # and have the same volume
         assert np.isclose(
             m.volume, b.geometry[k].volume, rtol=0.001)
+
+
+def texture_equal(a, b):
+    """
+    Make sure the texture in two meshes have the same
+    face-uv-position results.
+
+    Parameters
+    ------------
+    a : trimesh.Trimesh
+      Mesh to check
+    b : trimesh.Trimesh
+      Should be identical
+    """
+    try:
+        from scipy.spatial import cKDTree
+    except BaseException:
+        log.error('no scipy for check!', exc_info=True)
+        return
+
+    # an ordered position-face-UV blob to check
+    pa = np.hstack((a.vertices, a.visual.uv))[
+        a.faces].reshape((-1, 15))
+    pb = np.hstack((b.vertices, b.visual.uv))[
+        b.faces].reshape((-1, 15))
+    # query their actual ordered values against each other
+    q = cKDTree(pa).query_ball_tree(cKDTree(pb), r=1e-4)
+    assert all(i in match for i, match in enumerate(q))
 
 
 def check_fuze(fuze):
