@@ -10,7 +10,8 @@ from ..boolean import intersection
 
 def export_urdf(mesh,
                 directory, # save urdf in parent dir
-                name='0',
+                urdf_name,
+                sub_folder='pieces',
                 mass=0.1,
                 scale=1.0,
                 color=[0.98, 0.84, 0.35],
@@ -40,7 +41,7 @@ def export_urdf(mesh,
     # Extract the save directory and the file name
     fullpath = os.path.abspath(directory)
     # name = os.path.basename(fullpath)
-    _, ext = os.path.splitext(name)
+    _, ext = os.path.splitext(sub_folder)
 
     if ext != '':
         raise ValueError('URDF path must be a directory!')
@@ -85,7 +86,7 @@ def export_urdf(mesh,
 
         # Save each nearly convex mesh out to a file
         # piece_name = '{}_convex_piece_{}'.format(name, i)
-        piece_filename = '{}/{}.obj'.format(name, piece_name)
+        piece_filename = '{}/{}.obj'.format(sub_folder, piece_name)
         piece_filepath = os.path.join(fullpath, piece_filename)
         export_mesh(piece, piece_filepath)
 
@@ -154,7 +155,7 @@ def export_urdf(mesh,
 
     # Write URDF file
     tree = et.ElementTree(root)
-    urdf_filename = '{}.urdf'.format(name)
+    urdf_filename = '{}.urdf'.format(urdf_name)
     tree.write(os.path.join(fullpath, urdf_filename),
                pretty_print=True)
 
