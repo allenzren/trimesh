@@ -10,7 +10,7 @@ from ..boolean import intersection
 
 def export_urdf(mesh,
                 directory, # save urdf in parent dir
-                ind=0,  # save convex stl in subfolder - assume exists
+                name='0',
                 mass=0.1,
                 scale=1.0,
                 color=[0.98, 0.84, 0.35],
@@ -36,9 +36,10 @@ def export_urdf(mesh,
     import lxml.etree as et
     # TODO: fix circular import
     from .export import export_mesh
+
     # Extract the save directory and the file name
     fullpath = os.path.abspath(directory)
-    name = os.path.basename(fullpath)
+    # name = os.path.basename(fullpath)
     _, ext = os.path.splitext(name)
 
     if ext != '':
@@ -84,9 +85,8 @@ def export_urdf(mesh,
 
         # Save each nearly convex mesh out to a file
         # piece_name = '{}_convex_piece_{}'.format(name, i)
-        piece_filename = '{}.obj'.format(piece_name)
-        # piece_filepath = os.path.join(fullpath, piece_filename)
-        piece_filepath = os.path.join(fullpath, str(ind), piece_filename) # save in subfolder!
+        piece_filename = '{}/{}.obj'.format(name, piece_name)
+        piece_filepath = os.path.join(fullpath, piece_filename)
         export_mesh(piece, piece_filepath)
 
         # Set the mass properties of the piece
@@ -95,8 +95,7 @@ def export_urdf(mesh,
         piece.density = density
 
         link_name = 'link_{}'.format(piece_name)
-        # geom_name = '{}'.format(piece_filename)
-        geom_name = '{}/{}'.format(ind, piece_filename) # save in subfolder!
+        geom_name = '{}'.format(piece_filename)
         I = [['{:.2E}'.format(y) for y in x]  # NOQA
              for x in piece.moment_inertia]
 
@@ -155,7 +154,7 @@ def export_urdf(mesh,
 
     # Write URDF file
     tree = et.ElementTree(root)
-    urdf_filename = '{}.urdf'.format(ind)
+    urdf_filename = '{}.urdf'.format(name)
     tree.write(os.path.join(fullpath, urdf_filename),
                pretty_print=True)
 
