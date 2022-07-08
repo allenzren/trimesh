@@ -107,9 +107,8 @@ class SceneTests(g.unittest.TestCase):
                 s.explode()
 
     def test_scaling(self):
-        """
-        Test the scaling of scenes including unit conversion.
-        """
+        # Test the scaling of scenes including unit conversion.
+
         scene = g.get_mesh('cycloidal.3DXML')
 
         md5 = scene.md5()
@@ -253,7 +252,7 @@ class SceneTests(g.unittest.TestCase):
         assert sum(len(i) for i in dupe) == 29
 
         # test cache dumping and survivability of bad
-        # non-existant geometry specified in node_geometry
+        # non-existent geometry specified in node_geometry
         s.graph.update(dupe[0][0], geometry='GARBAGE')
         # make sure geometry was updated
         assert s.graph[dupe[0][0]][1] == 'GARBAGE'
@@ -296,10 +295,9 @@ class SceneTests(g.unittest.TestCase):
         assert len(n) == 0
 
     def test_zipped(self):
-        """
-        Make sure a zip file with multiple file types
-        is returned as a single scene.
-        """
+        # Make sure a zip file with multiple file types
+        # is returned as a single scene.
+
         # allow mixed 2D and 3D geometry
         m = g.get_mesh('scenes.zip', mixed=True)
 
@@ -360,6 +358,46 @@ class SceneTests(g.unittest.TestCase):
 
         scene.apply_translation([1, 0, 1])
         assert g.np.allclose(scene.bounds, [[.5, -.5, .5], [1.5, .5, 1.5]])
+
+    def test_material_group(self):
+        # check scene is correctly grouped by materials
+        s = g.get_mesh('box.obj', group_material=True)
+        assert set(s.geometry.keys()) == {'Material', 'SecondMaterial'}
+        assert len(s.geometry['Material'].faces) == 8
+        assert len(s.geometry['SecondMaterial'].faces) == 4
+
+        # make sure our flag does something
+        s = g.get_mesh('box.obj', group_material=False)
+        assert set(s.geometry.keys()) != {'Material', 'SecondMaterial'}
+
+    def test_export_concat(self):
+        # Scenes exported in mesh formats should be
+        # concatenating the meshes somewhere.
+        original = g.trimesh.creation.icosphere(
+            radius=0.123312)
+        original_hash = original.identifier_md5
+
+        scene = g.trimesh.Scene()
+        scene.add_geometry(original)
+
+        with g.TemporaryDirectory() as d:
+            for ext in ['stl', 'ply']:
+                file_name = g.os.path.join(d, 'mesh.' + ext)
+                scene.export(file_name)
+                loaded = g.trimesh.load(file_name)
+                assert g.np.isclose(loaded.volume,
+                                    original.volume)
+        # nothing should have changed
+        assert original.identifier_md5 == original_hash
+
+    def test_append_scenes(self):
+        scene_0 = g.trimesh.Scene(base_frame='not_world')
+        scene_1 = g.trimesh.Scene(base_frame='not_world')
+
+        scene_sum = g.trimesh.scene.scene.append_scenes(
+            (scene_0, scene_1), common=['not_world'], base_frame='not_world')
+
+        assert scene_sum.graph.base_frame == 'not_world'
 
 
 if __name__ == '__main__':

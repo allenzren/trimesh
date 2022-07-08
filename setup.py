@@ -20,10 +20,7 @@ if os.path.exists('README.md'):
 
 # minimal requirements for installing trimesh
 # note that `pip` requires setuptools itself
-requirements_default = set([
-    'numpy',     # all data structures
-    'setuptools'  # used for packaging
-])
+requirements_default = set(['numpy'])
 
 # "easy" requirements should install without compiling
 # anything on Windows, Linux, and Mac, for Python 2.7-3.4+
@@ -63,7 +60,8 @@ requirements_all = requirements_easy.union([
 requirements_test = set(['pytest',       # run all unit tests
                          'pytest-cov',   # coverage plugin
                          'pyinstrument',  # profile code
-                         'coveralls'])   # report coverage stats
+                         'coveralls',    # report coverage stats
+                         'ezdxf'])       # use as a validator for exports
 
 # Python 2.7 and 3.4 support has been dropped from packages
 # version lock those packages here so install succeeds
@@ -74,7 +72,8 @@ current = (sys.version_info.major, sys.version_info.minor)
 lock = [((3, 4), 'lxml', '4.3.5'),
         ((3, 4), 'shapely', '1.6.4'),
         ((3, 4), 'pyglet', '1.4.10'),
-        ((3, 5), 'sympy', None)]
+        ((3, 5), 'sympy', None),
+        ((3, 6), 'svg.path', '4.1')]
 for max_python, name, version in lock:
     if current <= max_python:
         # remove version-free requirements
@@ -83,6 +82,41 @@ for max_python, name, version in lock:
         if version is not None:
             # add working version locked requirements
             requirements_easy.add('{}=={}'.format(name, version))
+
+
+def format_all():
+    """
+    A shortcut to run automatic formatting and complaining
+    on all of the trimesh subdirectories.
+    """
+    import subprocess
+
+    def run_on(target):
+        # words that codespell hates
+        # note that it always checks against the lower case
+        word_skip = "datas,coo,nd,files',filetests,ba,childs,whats"
+        # files to skip spelling on
+        file_skip = "*.pyc,*.zip,.DS_Store,*.js,./trimesh/resources"
+        spell = ['codespell', '-i', '3',
+                 '--skip=' + file_skip,
+                 '-L', word_skip, '-w', target]
+        print("Running: \n {} \n\n\n".format(' '.join(spell)))
+        subprocess.check_call(spell)
+
+        formatter = ["autopep8", "--recursive", "--verbose",
+                     "--in-place", "--aggressive", target]
+        print("Running: \n {} \n\n\n".format(
+            ' '.join(formatter)))
+        subprocess.check_call(formatter)
+
+        flake = ['flake8', target]
+        print("Running: \n {} \n\n\n".format(' '.join(flake)))
+        subprocess.check_call(flake)
+
+    # run on our target locations
+    for t in ['trimesh', 'tests', 'examples']:
+        run_on(t)
+
 
 # if someone wants to output a requirements file
 # `python setup.py --list-all > requirements.txt`
@@ -94,6 +128,10 @@ elif '--list-easy' in sys.argv:
     # again will not include numpy+setuptools
     print('\n'.join(requirements_easy))
     exit()
+elif '--format' in sys.argv:
+    format_all()
+    exit()
+
 
 # call the magical setuptools setup
 setup(name='trimesh',
@@ -130,7 +168,7 @@ setup(name='trimesh',
           'trimesh.exchange',
           'trimesh.resources',
           'trimesh.interfaces'],
-      package_data={'trimesh': ['resources/*template*',
+      package_data={'trimesh': ['resources/templates/*',
                                 'resources/*.json',
                                 'resources/*.zip']},
       install_requires=list(requirements_default),

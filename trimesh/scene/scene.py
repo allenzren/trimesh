@@ -180,9 +180,10 @@ class Scene(Geometry3D):
             # if the name of the geometry is also a transform node
             if name in self.graph.nodes:
                 # a random unique identifier
-                unique = util.unique_id(increment=len(self.geometry))
+                unique = util.unique_id()
                 # geometry name + UUID
                 node_name = name + '_' + unique.upper()
+                assert node_name not in self.graph.nodes
             else:
                 # otherwise make the transform node name the same as the geom
                 node_name = name
@@ -312,7 +313,8 @@ class Scene(Geometry3D):
 
         Returns
         -----------
-        corners: (n, 3) float, points in space
+        corners: (n, 3) float
+          Points in space
         """
         # the saved corners of each instance
         corners_inst = []
@@ -795,8 +797,9 @@ class Scene(Geometry3D):
         nodes = graph.transforms.successors(node)
         # get every edge that has an included node
         edges = [e for e in graph.to_edgelist()
-                 if e[0] in nodes or e[1] in nodes]
-        # create a scene graph whet
+                 if e[0] in nodes]
+
+        # create a scene graph when
         graph = SceneGraph(base_frame=node)
         graph.from_edgelist(edges)
 
@@ -1171,7 +1174,7 @@ def split_scene(geometry, **kwargs):
     return scene
 
 
-def append_scenes(iterable, common=['world']):
+def append_scenes(iterable, common=['world'], base_frame='world'):
     """
     Concatenate multiple scene objects into one scene.
 
@@ -1181,6 +1184,8 @@ def append_scenes(iterable, common=['world']):
        Geometries that should be appended
     common : (n,) str
        Nodes that shouldn't be remapped
+    base_frame : str
+       Base frame of the resulting scene
 
     Returns
     ------------
@@ -1275,7 +1280,7 @@ def append_scenes(iterable, common=['world']):
         consumed.update(current)
 
     # add all data to a new scene
-    result = Scene()
+    result = Scene(base_frame=base_frame)
     result.graph.from_edgelist(edges)
     result.geometry.update(geometry)
 

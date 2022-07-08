@@ -45,7 +45,7 @@ class GraphTests(g.unittest.TestCase):
 
         # world should be root frame
         assert (s.graph.transforms.successors(
-            s.graph.base_frame) == s.graph.nodes)
+            s.graph.base_frame) == set(s.graph.nodes))
 
         for n in s.graph.nodes:
             # successors should always return subset of nodes
@@ -63,9 +63,20 @@ class GraphTests(g.unittest.TestCase):
         assert isinstance(s.graph.to_networkx(),
                           g.nx.DiGraph)
 
+    def test_nodes(self):
+        # get a scene graph
+        graph = g.get_mesh('cycloidal.3DXML').graph
+        # get any non-root node
+        node = next(iter((set(graph.nodes).difference(
+            [graph.base_frame]))))
+        # remove that node
+        graph.transforms.remove_node(node)
+        # should have dumped the cache and removed the node
+        assert node not in graph.nodes
+
     def test_kwargs(self):
         # test the function that converts various
-        # arguments into a homogenous transformation
+        # arguments into a homogeneous transformation
         f = g.trimesh.scene.transforms.kwargs_to_matrix
         # no arguments should be an identity matrix
         assert g.np.allclose(f(), g.np.eye(4))
@@ -98,10 +109,25 @@ class GraphTests(g.unittest.TestCase):
         assert s.graph.transforms.remove_node("1")
 
         assert len(s.graph.nodes_geometry) == 5
-        assert len(s.graph.nodes) == 9
+        assert len(s.graph.nodes) == 8
         assert len(s.graph.transforms.node_data) == 8
         assert len(s.graph.transforms.edge_data) == 6
         assert len(s.graph.transforms.parents) == 6
+
+    def test_subscene(self):
+        s = g.get_mesh("CesiumMilkTruck.glb")
+
+        assert len(s.graph.nodes) == 9
+        assert len(s.graph.transforms.node_data) == 9
+        assert len(s.graph.transforms.edge_data) == 8
+
+        ss = s.subscene('3')
+
+        assert ss.graph.base_frame == '3'
+        assert set(ss.graph.nodes) == {'3', '4'}
+        assert len(ss.graph.transforms.node_data) == 2
+        assert len(ss.graph.transforms.edge_data) == 1
+        assert list(ss.graph.transforms.edge_data.keys()) == [('3', '4')]
 
 
 if __name__ == '__main__':

@@ -1,12 +1,17 @@
 import uuid
-import copy
 
 import numpy as np
 import collections
 
+from copy import deepcopy
+
 from .. import util
 from .. import caching
 from .. import transformations
+
+# we compare to identity a lot
+_identity = np.eye(4)
+_identity.flags['WRITEABLE'] = False
 
 
 class SceneGraph(object):
@@ -20,7 +25,7 @@ class SceneGraph(object):
 
     def __init__(self, base_frame='world'):
         """
-        Create a scene graph, holding homogenous transformation
+        Create a scene graph, holding homogeneous transformation
         matrices and instance information about geometry.
 
         Parameters
@@ -136,7 +141,7 @@ class SceneGraph(object):
             # parent -> child -> child
             path = self.transforms.shortest_path(
                 frame_from, frame_to)
-            # collect a homogenous transform for each edge
+            # collect a homogeneous transform for each edge
             matrices = [edge_data[(u, v)]['matrix'] for u, v in
                         zip(path[:-1], path[1:])]
             # multiply matrices into single transform
@@ -151,9 +156,8 @@ class SceneGraph(object):
         """
         Return the last time stamp data was modified.
         """
-        if hasattr(self, '_modified'):
-            return self._modified
-        return '0.0'
+        return (getattr(self, '_modified', '-') +
+                getattr(self.transforms, '_modified', '-'))
 
     def copy(self):
         """
@@ -164,7 +168,11 @@ class SceneGraph(object):
         copied : TransformForest
           Copy of current object.
         """
-        return copy.deepcopy(self)
+        # create a copy without transferring cache
+        copied = SceneGraph()
+        copied.base_frame = deepcopy(self.base_frame)
+        copied.transforms = deepcopy(self.transforms)
+        return copied
 
     def to_flattened(self):
         """
@@ -266,7 +274,7 @@ class SceneGraph(object):
                 # get the matrix from this edge
                 matrix = edge_data[(parent, node)]['matrix']
                 # only include if it's not an identify matrix
-                if np.abs(matrix - np.eye(4)).max() > 1e-5:
+                if not util.allclose(matrix, _identity):
                     info['matrix'] = matrix.T.reshape(-1).tolist()
 
                 # if an extra was stored on this edge
@@ -520,11 +528,13 @@ class EnforcedForest(object):
         # topology has changed so clear cache
         if (u, v) not in self.edge_data:
             self._cache = {}
+            self._modified = str(uuid.uuid4())
         else:
             # check to see if matrix and geometry are identical
             edge = self.edge_data[(u, v)]
-            if (np.allclose(kwargs.get('matrix', np.eye(4)),
-                            edge.get('matrix', np.eye(4)))
+            if (util.allclose(kwargs.get('matrix', _identity),
+                              edge.get('matrix', _identity),
+                              1e-8)
                 and (edge.get('geometry') ==
                      kwargs.get('geometry'))):
                 return False
@@ -563,6 +573,7 @@ class EnforcedForest(object):
 
         # topology will change so clear cache
         self._cache = {}
+        self._modified = str(uuid.uuid4())
 
         # delete all children's references and parent reference
         children = [child for (child, parent) in self.parents.items() if parent == u]
@@ -583,7 +594,7 @@ class EnforcedForest(object):
 
     def shortest_path(self, u, v):
         """
-        Find the shortest path beween `u` and `v`.
+        Find the shortest path between `u` and `v`.
 
         Note that it will *always* be ordered from
         root direction to leaf direction, so `u` may
@@ -631,7 +642,7 @@ class EnforcedForest(object):
                 self._cache[(u, v)] = backward
                 return backward
             elif forward[-1] is None and backward[-1] is None:
-                raise ValueError('No path between nodes!')
+                raise ValueError('No path between nodes {} and {}!'.format(u, v))
         raise ValueError('Iteration limit exceeded!')
 
     @property
@@ -644,7 +655,7 @@ class EnforcedForest(object):
         nodes : set
           Every node currently stored.
         """
-        return set(self.node_data.keys())
+        return self.node_data.keys()
 
     @property
     def children(self):
@@ -703,6 +714,12 @@ class EnforcedForest(object):
                 collected.update(childs)
         return collected
 
+    def modified(self):
+        """
+        Return the last time stamp data was modified.
+        """
+        return getattr(self, '_modified', '-')
+
 
 def kwargs_to_matrix(
         matrix=None,
@@ -713,12 +730,12 @@ def kwargs_to_matrix(
         **kwargs):
     """
     Take multiple keyword arguments and parse them
-    into a homogenous transformation matrix.
+    into a homogeneous transformation matrix.
 
     Returns
     ---------
     matrix : (4, 4) float
-      Homogenous transformation matrix.
+      Homogeneous transformation matrix.
     """
     if matrix is not None:
         # a matrix takes immediate precedence over other options
